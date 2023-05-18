@@ -1,6 +1,7 @@
 package com.poing.admob;
 
 import org.godotengine.godot.Godot;
+import org.godotengine.godot.GodotLib;
 import org.godotengine.godot.plugin.SignalInfo;
 
 import com.google.android.gms.ads.AdError;
@@ -18,6 +19,7 @@ import com.google.android.gms.ads.interstitial.InterstitialAd; //interstitialAd
 import com.google.android.gms.ads.interstitial.InterstitialAdLoadCallback;
 
 import com.google.android.gms.ads.RequestConfiguration;
+import com.google.android.gms.ads.rewarded.RewardItem;
 import com.google.android.gms.ads.rewarded.RewardedAd; //rewardedAd
 import com.google.android.gms.ads.rewarded.RewardedAdLoadCallback;
 
@@ -106,7 +108,14 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                 "get_is_banner_loaded",
                 "get_is_interstitial_loaded",
                 "get_is_rewarded_loaded",
-                "get_is_rewarded_interstitial_loaded"
+                "get_is_rewarded_interstitial_loaded",
+
+                // new getter
+                "get_user_earned_rewarded_data",
+                "get_user_consent_status_message",
+                "get_form_consent_load_error",
+                "get_consent_info_update_message",
+                "get_consent_info_update_failure"
         );
     }
 
@@ -147,33 +156,33 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
     public Set<SignalInfo> getPluginSignals() {
         Set<SignalInfo> signals = new ArraySet<>();
 
-        signals.add(new SignalInfo("initialization_complete", Integer.class, String.class));
+        signals.add(new SignalInfo("initialization_complete"));
 
         signals.add(new SignalInfo("consent_form_dismissed"));
-        signals.add(new SignalInfo("consent_status_changed", String.class));
-        signals.add(new SignalInfo("consent_form_load_failure", Integer.class, String.class));
-        signals.add(new SignalInfo("consent_info_update_success", String.class));
-        signals.add(new SignalInfo("consent_info_update_failure", Integer.class, String.class));
+        signals.add(new SignalInfo("consent_status_changed"));
+        signals.add(new SignalInfo("consent_form_load_failure"));
+        signals.add(new SignalInfo("consent_info_update_success"));
+        signals.add(new SignalInfo("consent_info_update_failure"));
 
         signals.add(new SignalInfo("banner_loaded"));
-        signals.add(new SignalInfo("banner_failed_to_load", Integer.class));
+        signals.add(new SignalInfo("banner_failed_to_load"));
         signals.add(new SignalInfo("banner_opened"));
         signals.add(new SignalInfo("banner_clicked"));
         signals.add(new SignalInfo("banner_closed"));
         signals.add(new SignalInfo("banner_recorded_impression"));
         signals.add(new SignalInfo("banner_destroyed"));
 
-        signals.add(new SignalInfo("interstitial_failed_to_load", Integer.class));
+        signals.add(new SignalInfo("interstitial_failed_to_load"));
         signals.add(new SignalInfo("interstitial_loaded"));
-        signals.add(new SignalInfo("interstitial_failed_to_show", Integer.class));
+        signals.add(new SignalInfo("interstitial_failed_to_show"));
         signals.add(new SignalInfo("interstitial_opened"));
         signals.add(new SignalInfo("interstitial_clicked"));
         signals.add(new SignalInfo("interstitial_closed"));
         signals.add(new SignalInfo("interstitial_recorded_impression"));
 
-        signals.add(new SignalInfo("rewarded_ad_failed_to_load", Integer.class));
+        signals.add(new SignalInfo("rewarded_ad_failed_to_load"));
         signals.add(new SignalInfo("rewarded_ad_loaded"));
-        signals.add(new SignalInfo("rewarded_ad_failed_to_show", Integer.class));
+        signals.add(new SignalInfo("rewarded_ad_failed_to_show"));
         signals.add(new SignalInfo("rewarded_ad_opened"));
         signals.add(new SignalInfo("rewarded_ad_clicked"));
         signals.add(new SignalInfo("rewarded_ad_closed"));
@@ -187,11 +196,10 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
         signals.add(new SignalInfo("rewarded_interstitial_ad_closed"));
         signals.add(new SignalInfo("rewarded_interstitial_ad_recorded_impression"));
 
-        signals.add(new SignalInfo("user_earned_rewarded", String.class, Integer.class));
+        signals.add(new SignalInfo("user_earned_rewarded"));
 
         return signals;
     }
-
 
     public void initialize(boolean pIsForChildDirectedTreatment, String pMaxAdContentRating, boolean pIsReal, boolean pIsTestEuropeUserConsent) {
         if (!aIsInitialized){
@@ -212,16 +220,30 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                     aIsInitialized = true;
                 }
 
-                emitSignal("initialization_complete",statusGADMobileAds, "GADMobileAds");
+                emitSignal("initialization_complete");
             }); //initializes the admob
         }
     }
+
+    String consentStatusMsg = "";
+
+    int loadFormConsentErrorCode = 0;
+    String loadFormConsentErrorMessage = "";
+
+    public String get_user_consent_status_message(){
+        return consentStatusMsg;
+    }
+    public String[] get_form_consent_load_error(){
+        return new String[]{loadFormConsentErrorCode + "", loadFormConsentErrorMessage};
+    }
+
+
 
     private void loadConsentForm() {
         UserMessagingPlatform.loadConsentForm(
                 aActivity,
                 consentForm -> {
-                    String consentStatusMsg = "";
+                    consentStatusMsg = "";
                     if (aConsentInformation.getConsentStatus() == ConsentInformation.ConsentStatus.REQUIRED) {
                         consentForm.show(
                                 aActivity,
@@ -243,13 +265,31 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                             consentStatusMsg = "User consent obtained. Personalization not defined.";
                             break;
                     }
-                    emitSignal("consent_status_changed", consentStatusMsg);
+                    emitSignal("consent_status_changed");
                 },
-                formError -> emitSignal("consent_form_load_failure", formError.getErrorCode(), formError.getMessage())
+                formError -> {
+                    loadFormConsentErrorCode = formError.getErrorCode();
+                    loadFormConsentErrorMessage = formError.getMessage();
+                    emitSignal("consent_form_load_failure");
+                }
         );
     }
 
+    String consentInfoUpdateMsg = "";
+    public String get_consent_info_update_message(){
+        return consentInfoUpdateMsg;
+    }
+
+    int consentInfoUpdateErrorCode = 0;
+    String consentInfoUpdateErrorMessage = "";
+
+
+    public String[] get_consent_info_update_failure(){
+        return new String[]{consentInfoUpdateErrorCode + "", consentInfoUpdateErrorMessage};
+    }
+
     public void request_user_consent() {
+        consentInfoUpdateMsg = "";
         aConsentInformation = UserMessagingPlatform.getConsentInformation(aActivity);
 
         ConsentRequestParameters.Builder paramsBuilder = new ConsentRequestParameters.Builder().setTagForUnderAgeOfConsent(aIsForChildDirectedTreatment);
@@ -269,13 +309,19 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
         aConsentInformation.requestConsentInfoUpdate(aActivity, params,
                 () -> {
                     if (aConsentInformation.isConsentFormAvailable()) {
-                        emitSignal("consent_info_update_success", "Consent Form Available");
+                        consentInfoUpdateMsg = "Consent Form Available";
+                        emitSignal("consent_info_update_success");
                         loadConsentForm();
                     } else {
-                        emitSignal("consent_info_update_success", "Consent Form not Available");
+                        consentInfoUpdateMsg =  "Consent Form not Available";
+                        emitSignal("consent_info_update_success");
                     }
                 },
-                formError -> emitSignal("consent_info_update_failure", formError.getErrorCode(), formError.getMessage())
+                formError -> {
+                    consentInfoUpdateErrorCode = formError.getErrorCode();
+                    consentInfoUpdateErrorMessage = formError.getMessage();
+                    emitSignal("consent_info_update_failure");
+                }
         );
     }
 
@@ -387,7 +433,7 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                     @Override
                     public void onAdFailedToLoad(@NonNull LoadAdError adError) {
                         // Code to be executed when an ad request fails.
-                        emitSignal("banner_failed_to_load", adError.getCode());
+                        emitSignal("banner_failed_to_load");
                     }
 
                     @Override
@@ -536,7 +582,7 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                     public void onAdFailedToLoad(@NonNull LoadAdError adError) {
                         // Code to be executed when an ad request fails.
                         aInterstitialAd = null;
-                        emitSignal("interstitial_failed_to_load", adError.getCode());
+                        emitSignal("interstitial_failed_to_load");
                     }
                 });
             }
@@ -566,7 +612,7 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                         public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
                             // Called when fullscreen content failed to show.
                             aInterstitialAd = null;
-                            emitSignal("interstitial_failed_to_show", adError.getCode());
+                            emitSignal("interstitial_failed_to_show");
                             aIsInterstitialLoaded = false;
                         }
 
@@ -599,7 +645,7 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                     public void onAdFailedToLoad(@NonNull LoadAdError loadAdError) {
                         // Handle the error.
                         aRewardedAd = null;
-                        emitSignal("rewarded_ad_failed_to_load", loadAdError.getCode());
+                        emitSignal("rewarded_ad_failed_to_load");
 
                     }
 
@@ -614,6 +660,8 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
             }
         });
     }
+
+    RewardItem rewardItem;
 
     public void show_rewarded()
     {
@@ -639,7 +687,7 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                         public void onAdFailedToShowFullScreenContent(@NonNull AdError adError) {
                             // Called when ad fails to show.
                             aRewardedAd = null;
-                            emitSignal("rewarded_ad_failed_to_show", adError.getCode());
+                            emitSignal("rewarded_ad_failed_to_show");
                         }
 
                         @Override
@@ -655,13 +703,18 @@ public class AdMob extends org.godotengine.godot.plugin.GodotPlugin {
                         }
                     });
 
-                    aRewardedAd.show(aActivity, rewardItem -> {
+                    aRewardedAd.show(aActivity, _rewardItem -> {
                         // Handle the reward.
-                        emitSignal("user_earned_rewarded", rewardItem.getType(), rewardItem.getAmount());
+                        rewardItem = _rewardItem;
+                        emitSignal("user_earned_rewarded");
                     });
                 }
             }
         });
+    }
+
+    public String[] get_user_earned_rewarded_data(){
+        return new String[]{rewardItem.getType(), rewardItem.getAmount() + ""};
     }
     //
 
